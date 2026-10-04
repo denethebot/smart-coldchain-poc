@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8">
+    <title>Cold Chain Monitor</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"
+        type="text/javascript"></script>
+    <style>
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            background: #0b0f14;
+            color: #e6e6e6;
+            padding: 24px;
+            margin: 0;
+        }
+
+        h1 {
+            font-size: 20px;
+            color: #fff;
+            margin-bottom: 20px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .card {
+            background: #151b23;
+            border-radius: 10px;
+            padding: 20px;
+            border-left: 5px solid #2ecc71;
+        }
+
+        .card.warning {
+            border-left-color: #f1c40f;
+        }
+
+        .card.critical {
+            border-left-color: #e74c3c;
+        }
+
+        .card.success {
+            border-left-color: #3498db;
+        }
+
+        .label {
+            font-size: 12px;
+            text-transform: uppercase;
+            color: #888;
+            letter-spacing: 1px;
+        }
+
+        .value {
+            font-size: 28px;
+            font-weight: 700;
+            margin: 6px 0 14px;
+        }
+
+        .sub {
+            font-size: 14px;
+            color: #aaa;
+        }
+
+        #log {
+            background: #0e1319;
+            border-radius: 10px;
+            padding: 16px;
+            height: 400px;
+            overflow-y: auto;
+            font-family: 'Consolas', monospace;
+            font-size: 13px;
+        }
+
+        .log-entry {
+            padding: 6px 0;
+            border-bottom: 1px solid #1c232c;
+        }
+
+        .log-time {
+            color: #666;
+            margin-right: 10px;
+        }
+
+        .tag {
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 11px;
+            font-weight: bold;
+            margin-right: 8px;
+        }
+
+        .tag-info {
+            background: #2c3e50;
+            color: #85c1e9;
+        }
+
+        .tag-excursion {
+            background: #7d6608;
+            color: #f9e79f;
+        }
+
+        .tag-recommendation {
+            background: #1e4620;
+            color: #82e0aa;
+        }
+
+        .tag-unrecoverable {
+            background: #641e16;
+            color: #f1948a;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Cold Chain Live Monitor - Shipment S1</h1>
+    <div class="grid">
+        <div>
+            <div class="card" id="statusCard">
+                <div class="label">Current Temperature</div>
+                <div class="value" id="temp">-- C</div>
+                <div class="sub" id="statusText">Waiting for data...</div>
+            </div>
+            <div class="card" id="recoCard" style="margin-top:20px; display:none;">
+                <div class="label">Recommendation</div>
+                <div class="value" id="recoText">--</div>
+                <div class="sub" id="recoEta"></div>
+            </div>
+        </div>
+        <div>
+            <div class="label" style="margin-bottom:8px;">Live Process Log</div>
+            <div id="log"></div>
+        </div>
+    </div>
+
+    <script>
+        var client = new Paho.MQTT.Client("broker.hivemq.com", 8884, "dash-" + Math.random());
+        var SAFE_MAX_TEMP = 8.0;
+
+        client.onConnectionLost = function (r) {
+            addLog("info", "Connection lost: " + r.errorMessage);
+        };
+
+        client.onMessageArrived = function (msg) {
+            console.log("RAW MESSAGE:", msg.destinationName, msg.payloadString);
+            var topic = msg.destinationName;
+            var data = JSON.parse(msg.payloadString);
+            if (topic.indexOf("/telemetry") !== -1) {
+                handleTelemetry(data);
+            } else if (topic.indexOf("/status") !== -1) {
+                handleStatus(data);
+            }
+        };
+
+        client.connect({
+            useSSL: true,
+            onSuccess: function () {
+                addLog("info", "Connected to broker");
+                client.subscribe("coldchain-poc-test/shipments/s1/telemetry");
+                client.subscribe("coldchain-poc-test/shipments/s1/status");
+            },
+            onFailure: function (err) {
+                addLog("info", "Connection failed");
+                console.log("Connection failed:", err);
+            }
+        });
+
+        function handleTelemetry(reading) {
+            document.getElementById("temp").innerText = reading.temperature.toFixed(2) + " C";
+            var card = document.getElementById("statusCard");
+            var text = document.getElementById("statusText");
+            if (reading.temperature > SAFE_MAX_TEMP) {
+                card.className = "card warning";
+                text.innerText = "Temperature excursion in progress";
+            } else {
+                card.className = "card";
+                text.innerText = "Within safe range (2-8C)";
+            }
+        }
+
+        function handleStatus(data) {
+            addLog(data.type, data.message);
+            if (data.type === "recommendation") {
+                var recoCard = document.getElementById("recoCard");
+                recoCard.style.display = "block";
+                recoCard.className = "card success";
+                document.getElementById("recoText").innerText = data.message;
+                var etaText = "";
+                if (data.eta_min) {
+                    etaText = "ETA: " + data.eta_min.toFixed(1) + " min";
+                }
+                document.getElementById("recoEta").innerText = etaText;
+            }
+            if (data.type === "unrecoverable") {
+                document.getElementById("statusCard").className = "card critical";
+            }
+        }
+
+        function addLog(type, message) {
+            var log = document.getElementById("log");
+            var entry = document.createElement("div");
+            entry.className = "log-entry";
+            var time = new Date().toLocaleTimeString();
+            entry.innerHTML = "<span class='log-time'>" + time + "</span><span class='tag tag-" + type + "'>" + type + "</span><span>" + message + "</span>";
+            log.insertBefore(entry, log.firstChild);
+        }
+    </script>
+</body>
+
+</html>
