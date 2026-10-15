@@ -1,215 +1,369 @@
 <!DOCTYPE html>
-<html>
+<html lang="en" class="dark">
 
 <head>
     <meta charset="UTF-8">
-    <title>Cold Chain Monitor</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"
-        type="text/javascript"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>ColdChain</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
     <style>
-        * {
-            box-sizing: border-box;
-        }
-
         body {
-            font-family: 'Segoe UI', sans-serif;
-            background: #0b0f14;
-            color: #e6e6e6;
-            padding: 24px;
-            margin: 0;
+            background: #000;
+            font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+            -webkit-font-smoothing: antialiased;
         }
 
-        h1 {
-            font-size: 20px;
-            color: #fff;
-            margin-bottom: 20px;
+        .leaflet-container {
+            background: #0a0a0c;
+            font-family: inherit;
         }
 
-        .grid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-
-        .card {
-            background: #151b23;
-            border-radius: 10px;
-            padding: 20px;
-            border-left: 5px solid #2ecc71;
-        }
-
-        .card.warning {
-            border-left-color: #f1c40f;
-        }
-
-        .card.critical {
-            border-left-color: #e74c3c;
-        }
-
-        .card.success {
-            border-left-color: #3498db;
-        }
-
-        .label {
-            font-size: 12px;
-            text-transform: uppercase;
-            color: #888;
-            letter-spacing: 1px;
-        }
-
-        .value {
-            font-size: 28px;
-            font-weight: 700;
-            margin: 6px 0 14px;
-        }
-
-        .sub {
-            font-size: 14px;
-            color: #aaa;
-        }
-
-        #log {
-            background: #0e1319;
-            border-radius: 10px;
-            padding: 16px;
-            height: 400px;
-            overflow-y: auto;
-            font-family: 'Consolas', monospace;
-            font-size: 13px;
-        }
-
-        .log-entry {
-            padding: 6px 0;
-            border-bottom: 1px solid #1c232c;
-        }
-
-        .log-time {
-            color: #666;
-            margin-right: 10px;
-        }
-
-        .tag {
-            padding: 2px 8px;
-            border-radius: 4px;
+        .leaflet-tooltip {
+            background: rgba(24, 24, 27, .85);
+            color: #e4e4e7;
+            border: 1px solid rgba(255, 255, 255, .1);
+            border-radius: 8px;
             font-size: 11px;
-            font-weight: bold;
-            margin-right: 8px;
+            padding: 2px 6px;
+            box-shadow: none;
         }
 
-        .tag-info {
-            background: #2c3e50;
-            color: #85c1e9;
+        .leaflet-tooltip-top:before,
+        .leaflet-tooltip-bottom:before {
+            display: none;
         }
 
-        .tag-excursion {
-            background: #7d6608;
-            color: #f9e79f;
+        .leaflet-control-attribution {
+            background: rgba(24, 24, 27, .7) !important;
+            color: #71717a !important;
+            font-size: 10px;
         }
 
-        .tag-recommendation {
-            background: #1e4620;
-            color: #82e0aa;
+        .leaflet-control-attribution a {
+            color: #a1a1aa !important;
         }
 
-        .tag-unrecoverable {
-            background: #641e16;
-            color: #f1948a;
+        .leaflet-bar a {
+            background: rgba(24, 24, 27, .85);
+            color: #e4e4e7;
+            border-color: rgba(255, 255, 255, .1);
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .animate-pulse {
+                animation: none;
+            }
         }
     </style>
 </head>
 
-<body>
-    <h1>Cold Chain Live Monitor - Shipment S1</h1>
-    <div class="grid">
-        <div>
-            <div class="card" id="statusCard">
-                <div class="label">Current Temperature</div>
-                <div class="value" id="temp">-- C</div>
-                <div class="sub" id="statusText">Waiting for data...</div>
+<body class="bg-black text-zinc-100 min-h-screen">
+
+    <header class="fixed top-0 inset-x-0 z-[2000] bg-zinc-900/70 backdrop-blur-2xl border-b border-white/10">
+        <div class="max-w-6xl mx-auto h-14 px-4 flex items-center justify-between">
+            <div class="flex items-center">
+                <a id="logo" href="#/" class="text-lg font-bold tracking-tight">Cold<span
+                        class="text-[#007aff]">Chain</span></a>
+                <a id="backBtn" href="#/"
+                    class="hidden items-center text-sm font-medium text-[#007aff] active:scale-[0.98] transition-transform">&#8249;&nbsp;Overview</a>
             </div>
-            <div class="card" id="recoCard" style="margin-top:20px; display:none;">
-                <div class="label">Recommendation</div>
-                <div class="value" id="recoText">--</div>
-                <div class="sub" id="recoEta"></div>
+            <div class="flex items-center gap-2 text-xs text-zinc-400">
+                <span id="dot" class="w-2 h-2 rounded-full bg-[#ff2d55]"></span><span id="connText">Connecting</span>
             </div>
         </div>
-        <div>
-            <div class="label" style="margin-bottom:8px;">Live Process Log</div>
-            <div id="log"></div>
-        </div>
-    </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-4 pt-20 pb-10">
+
+        <section id="home">
+            <h1 class="text-2xl font-bold tracking-tight mb-4 px-1">Overview</h1>
+            <div class="grid lg:grid-cols-5 gap-4">
+                <div class="lg:col-span-3 order-2 lg:order-1">
+                    <div class="rounded-2xl overflow-hidden bg-zinc-900/80 border border-white/5">
+                        <div class="px-4 py-3 flex items-center justify-between border-b border-zinc-800/60">
+                            <h2 class="text-sm font-semibold">Live map</h2>
+                            <div class="flex items-center gap-3 text-xs text-zinc-400">
+                                <span class="flex items-center gap-1"><i
+                                        class="w-2 h-2 rounded-full bg-[#007aff]"></i>Storage</span>
+                                <span class="flex items-center gap-1"><i
+                                        class="w-2 h-2 rounded-full bg-[#34c759]"></i>Vehicle</span>
+                                <span class="flex items-center gap-1"><i
+                                        class="w-2 h-2 rounded-full bg-white"></i>Shipment</span>
+                            </div>
+                        </div>
+                        <div id="map" class="h-[440px] isolate"></div>
+                    </div>
+                </div>
+                <div class="lg:col-span-2 order-1 lg:order-2 space-y-4">
+                    <div id="emergency"></div>
+                    <div class="rounded-2xl bg-zinc-900/80 border border-white/5 overflow-hidden">
+                        <div class="px-4 py-3 border-b border-zinc-800/60">
+                            <h2 class="text-sm font-semibold">Live shipments</h2>
+                        </div>
+                        <div id="shipList" class="divide-y divide-zinc-800/60"></div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="detail" class="hidden max-w-2xl mx-auto">
+            <div class="flex items-center justify-between mb-4 px-1">
+                <h1 id="dTitle" class="text-2xl font-bold tracking-tight">Shipment</h1>
+                <span id="dPill"></span>
+            </div>
+
+            <div class="rounded-2xl bg-zinc-900/80 border border-white/5 overflow-hidden mb-4">
+                <div class="grid grid-cols-3 divide-x divide-zinc-800/60">
+                    <div class="px-4 py-4">
+                        <div class="text-xs text-zinc-400">Temperature</div>
+                        <div id="dTemp" class="text-xl font-semibold mt-1">--</div>
+                    </div>
+                    <div class="px-4 py-4">
+                        <div class="text-xs text-zinc-400">Time to critical</div>
+                        <div id="dLeft" class="text-xl font-semibold mt-1">--</div>
+                    </div>
+                    <div class="px-4 py-4">
+                        <div class="text-xs text-zinc-400">Last reading</div>
+                        <div id="dUpd" class="text-xl font-semibold mt-1">--</div>
+                    </div>
+                </div>
+                <div id="dAction" class="border-t border-zinc-800/60"></div>
+            </div>
+
+            <div class="rounded-2xl bg-zinc-900/80 border border-white/5 overflow-hidden">
+                <div class="px-4 py-3 border-b border-zinc-800/60">
+                    <h2 class="text-sm font-semibold">Activity log</h2>
+                </div>
+                <div id="dLog" class="divide-y divide-zinc-800/60 max-h-[480px] overflow-y-auto"></div>
+            </div>
+        </section>
+
+    </main>
 
     <script>
-        var client = new Paho.MQTT.Client("broker.hivemq.com", 8884, "dash-" + Math.random());
-        var SAFE_MAX_TEMP = 8.0;
-
-        client.onConnectionLost = function (r) {
-            addLog("info", "Connection lost: " + r.errorMessage);
+        // Fleet positions match simulation/fake_fleet_data.py
+        var FLEET = {
+            storage: [
+                { id: "origin", lat: 12.9716, lon: 77.5946 },
+                { id: "storage_B", lat: 12.9352, lon: 77.6245 },
+                { id: "storage_C", lat: 13.0100, lon: 77.5600 }
+            ],
+            vehicles: [
+                { id: "vehicle_V2", lat: 12.9600, lon: 77.6100, spare: true },
+                { id: "vehicle_V3", lat: 12.9900, lon: 77.5800, spare: false }
+            ]
         };
+        var SAFE_MAX = 8;
+        var PREFIX = "coldchain-poc-test/shipments";
+        var ships = {};
+        var currentId = null;
 
-        client.onMessageArrived = function (msg) {
-            console.log("RAW MESSAGE:", msg.destinationName, msg.payloadString);
-            var topic = msg.destinationName;
-            var data = JSON.parse(msg.payloadString);
-            if (topic.indexOf("/telemetry") !== -1) {
-                handleTelemetry(data);
-            } else if (topic.indexOf("/status") !== -1) {
-                handleStatus(data);
-            }
-        };
-
-        client.connect({
-            useSSL: true,
-            onSuccess: function () {
-                addLog("info", "Connected to broker");
-                client.subscribe("coldchain-poc-test/shipments/s1/telemetry");
-                client.subscribe("coldchain-poc-test/shipments/s1/status");
-            },
-            onFailure: function (err) {
-                addLog("info", "Connection failed");
-                console.log("Connection failed:", err);
-            }
-        });
-
-        function handleTelemetry(reading) {
-            document.getElementById("temp").innerText = reading.temperature.toFixed(2) + " C";
-            var card = document.getElementById("statusCard");
-            var text = document.getElementById("statusText");
-            if (reading.temperature > SAFE_MAX_TEMP) {
-                card.className = "card warning";
-                text.innerText = "Temperature excursion in progress";
-            } else {
-                card.className = "card";
-                text.innerText = "Within safe range (2-8C)";
-            }
+        function $(id) { return document.getElementById(id); }
+        function esc(t) {
+            return String(t).replace(/[&<>"']/g, function (c) {
+                return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+            });
+        }
+        function blank(id) { return { id: id, temp: null, lat: null, lon: null, timeLeft: null, reco: null, unrec: false, updated: null, log: [] }; }
+        function fmtMin(m) {
+            if (m === null || m === undefined) return "--";
+            if (m <= 0) return "0m";
+            var h = Math.floor(m / 60), mm = Math.floor(m % 60);
+            return h > 0 ? h + "h " + mm + "m" : mm + "m";
+        }
+        function status(s) {
+            if (s.temp === null) return { key: "wait", label: "Waiting", cls: "bg-zinc-700/60 text-zinc-300" };
+            if (s.temp <= SAFE_MAX) return { key: "safe", label: "Safe", cls: "bg-[#34c759]/15 text-[#34c759]" };
+            if (s.unrec) return { key: "crit", label: "Unrecoverable", cls: "bg-[#ff2d55]/15 text-[#ff2d55]" };
+            return { key: "warn", label: "Excursion", cls: "bg-[#ff9f0a]/15 text-[#ff9f0a]" };
+        }
+        function pill(st) { return "<span class='px-2.5 py-1 rounded-full text-xs font-semibold " + st.cls + "'>" + st.label + "</span>"; }
+        function actionText(s) {
+            if (s.unrec) return "No option beats the deadline. Check whether the vaccines are still viable.";
+            if (s.reco) return esc(s.reco.action) + (s.reco.eta ? ", " + s.reco.eta.toFixed(0) + " min away" : "");
+            return "Evaluating recovery options";
         }
 
-        function handleStatus(data) {
-            addLog(data.type, data.message);
-            if (data.type === "recommendation") {
-                var recoCard = document.getElementById("recoCard");
-                recoCard.style.display = "block";
-                recoCard.className = "card success";
-                document.getElementById("recoText").innerText = data.message;
-                var etaText = "";
-                if (data.eta_min) {
-                    etaText = "ETA: " + data.eta_min.toFixed(1) + " min";
+        // ---------- MQTT ----------
+        function onMsg(msg) {
+            var parts = msg.destinationName.split("/");
+            var id = parts[2], kind = parts[3];
+            var d;
+            try { d = JSON.parse(msg.payloadString); } catch (e) { return; }
+            var s = ships[id] || (ships[id] = blank(id));
+
+            if (kind === "telemetry") {
+                var t = Number(d.temperature);
+                if (!isFinite(t)) return;
+                s.temp = t;
+                if (isFinite(Number(d.lat)) && isFinite(Number(d.lon))) { s.lat = Number(d.lat); s.lon = Number(d.lon); }
+                s.updated = Date.now();
+                if (t <= SAFE_MAX) { s.reco = null; s.unrec = false; s.timeLeft = null; }
+            } else if (kind === "status") {
+                if (d.time_left_min !== undefined) s.timeLeft = Number(d.time_left_min);
+                if (d.type === "recommendation") { s.reco = { action: String(d.message), eta: Number(d.eta_min) }; s.unrec = false; }
+                if (d.type === "unrecoverable") { s.unrec = true; s.reco = null; }
+                s.log.unshift({ t: Date.now(), type: String(d.type), msg: String(d.message) });
+                if (s.log.length > 100) s.log.pop();
+            }
+            render();
+        }
+
+        var client = new Paho.MQTT.Client("broker.hivemq.com", 8884, "cc-dash-" + Math.random().toString(16).slice(2));
+        client.onMessageArrived = onMsg;
+        client.onConnectionLost = function () { setConn(false, "Reconnecting"); setTimeout(connect, 3000); };
+
+        function setConn(on, text) {
+            $("dot").className = "w-2 h-2 rounded-full " + (on ? "bg-[#34c759]" : "bg-[#ff2d55]");
+            $("connText").textContent = text;
+        }
+        function connect() {
+            client.connect({
+                useSSL: true,
+                timeout: 10,
+                onSuccess: function () {
+                    setConn(true, "Live");
+                    client.subscribe(PREFIX + "/+/telemetry");
+                    client.subscribe(PREFIX + "/+/status");
+                },
+                onFailure: function () { setConn(false, "Offline, retrying"); setTimeout(connect, 3000); }
+            });
+        }
+
+        // ---------- Map ----------
+        var map, fleetBounds = [], layers = {};
+        function findPoint(id) { return FLEET.storage.concat(FLEET.vehicles).filter(function (p) { return p.id === id; })[0]; }
+
+        function initMap() {
+            map = L.map("map", { attributionControl: false }).setView([12.97, 77.59], 12);
+            L.control.attribution({ prefix: false }).addTo(map);
+            // Replace the tile layer with CARTO Light (uses OSM data, but served via CARTO's commercial CDN infrastructure)
+            L.tileLayer("https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png", {
+                maxZoom: 19,
+                attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, Tiles courtesy of <a href="https://www.hotosm.org/" target="_blank">Humanitarian OpenStreetMap Team</a>'
+            }).addTo(map);
+
+            FLEET.storage.forEach(function (p) {
+                L.circleMarker([p.lat, p.lon], { radius: 8, color: "#007aff", fillColor: "#007aff", fillOpacity: .85, weight: 2 })
+                    .bindTooltip(p.id, { permanent: true, direction: "top", offset: [0, -6] }).addTo(map);
+                fleetBounds.push([p.lat, p.lon]);
+            });
+            FLEET.vehicles.forEach(function (v) {
+                var c = v.spare ? "#34c759" : "#71717a";
+                L.circleMarker([v.lat, v.lon], { radius: 6, color: c, fillColor: c, fillOpacity: .85, weight: 2 })
+                    .bindTooltip(v.id + (v.spare ? "" : " (full)"), { permanent: true, direction: "top", offset: [0, -5] }).addTo(map);
+                fleetBounds.push([v.lat, v.lon]);
+            });
+            map.fitBounds(fleetBounds, { padding: [40, 40] });
+        }
+
+        function renderMap() {
+            if (!map) return;
+            Object.keys(ships).forEach(function (id) {
+                var s = ships[id];
+                if (s.lat === null) return;
+                var key = status(s).key;
+                var col = key === "safe" ? "#ffffff" : key === "warn" ? "#ff9f0a" : "#ff2d55";
+                var m = layers[id];
+                if (!m) {
+                    m = layers[id] = {
+                        dot: L.circleMarker([s.lat, s.lon], { radius: 9, weight: 3 }).bindTooltip("", { permanent: true, direction: "bottom", offset: [0, 8] }).addTo(map),
+                        line: null
+                    };
                 }
-                document.getElementById("recoEta").innerText = etaText;
-            }
-            if (data.type === "unrecoverable") {
-                document.getElementById("statusCard").className = "card critical";
-            }
+                m.dot.setLatLng([s.lat, s.lon]).setStyle({ color: col, fillColor: col, fillOpacity: .9 });
+                m.dot.setTooltipContent(esc(id.toUpperCase()));
+                if (m.line) { map.removeLayer(m.line); m.line = null; }
+                if (s.reco) {
+                    var dest = findPoint(s.reco.action.split(" ").pop());
+                    if (dest) m.line = L.polyline([[s.lat, s.lon], [dest.lat, dest.lon]], { color: "#007aff", weight: 3, dashArray: "6 8" }).addTo(map);
+                }
+            });
         }
 
-        function addLog(type, message) {
-            var log = document.getElementById("log");
-            var entry = document.createElement("div");
-            entry.className = "log-entry";
-            var time = new Date().toLocaleTimeString();
-            entry.innerHTML = "<span class='log-time'>" + time + "</span><span class='tag tag-" + type + "'>" + type + "</span><span>" + message + "</span>";
-            log.insertBefore(entry, log.firstChild);
+        // ---------- Views ----------
+        function renderHome() {
+            var list = Object.keys(ships).map(function (k) { return ships[k]; });
+            var emerg = list.filter(function (s) { var k = status(s).key; return k === "warn" || k === "crit"; });
+            var box = $("emergency");
+
+            if (emerg.length) {
+                box.className = "rounded-2xl bg-[#ff2d55]/10 border border-[#ff2d55]/30 overflow-hidden";
+                box.innerHTML =
+                    "<div class='px-4 py-3 flex items-center gap-2 border-b border-[#ff2d55]/20'><span class='w-2 h-2 rounded-full bg-[#ff2d55] animate-pulse'></span><h2 class='text-sm font-semibold text-[#ff2d55]'>Emergency action needed</h2></div>" +
+                    "<div class='divide-y divide-[#ff2d55]/15'>" +
+                    emerg.map(function (s) {
+                        return "<a href='#/shipment/" + encodeURIComponent(s.id) + "' class='block px-4 py-3 active:scale-[0.98] transition-transform'>" +
+                            "<div class='flex items-center justify-between'><span class='text-sm font-semibold'>Shipment " + esc(s.id.toUpperCase()) + "</span>" +
+                            "<span class='text-xs text-zinc-400'>" + s.temp.toFixed(1) + " &deg;C, " + fmtMin(s.timeLeft) + " left</span></div>" +
+                            "<div class='text-xs text-zinc-300 mt-1'>" + actionText(s) + "</div></a>";
+                    }).join("") + "</div>";
+            } else {
+                box.className = "rounded-2xl bg-zinc-900/80 border border-white/5";
+                box.innerHTML = "<div class='px-4 py-3 flex items-center gap-2'><span class='w-2 h-2 rounded-full bg-[#34c759]'></span><span class='text-sm font-semibold'>No emergencies</span><span class='text-xs text-zinc-400'>Every shipment is within 2 to 8 &deg;C</span></div>";
+            }
+
+            $("shipList").innerHTML = list.length ? list.map(function (s) {
+                var st = status(s);
+                return "<a href='#/shipment/" + encodeURIComponent(s.id) + "' class='flex items-center justify-between px-4 py-3.5 active:scale-[0.98] transition-transform'>" +
+                    "<div><div class='text-sm font-semibold'>Shipment " + esc(s.id.toUpperCase()) + "</div>" +
+                    "<div class='text-xs text-zinc-400 mt-0.5'>" + (s.temp === null ? "--" : s.temp.toFixed(1)) + " &deg;C</div></div>" +
+                    "<div class='flex items-center gap-2'>" + pill(st) + "<span class='text-zinc-600'>&#8250;</span></div></a>";
+            }).join("") : "<div class='px-4 py-6 text-xs text-zinc-400 text-center'>Waiting for the first shipment to report in. Start the sensor publisher.</div>";
         }
+
+        var TAGS = {
+            info: "bg-zinc-700/60 text-zinc-300",
+            excursion: "bg-[#ff9f0a]/15 text-[#ff9f0a]",
+            recommendation: "bg-[#34c759]/15 text-[#34c759]",
+            unrecoverable: "bg-[#ff2d55]/15 text-[#ff2d55]"
+        };
+
+        function renderDetail() {
+            var s = ships[currentId] || blank(currentId);
+            var st = status(s);
+            var live = st.key === "warn" || st.key === "crit";
+            $("dTitle").textContent = "Shipment " + currentId.toUpperCase();
+            $("dPill").innerHTML = pill(st);
+            $("dTemp").innerHTML = s.temp === null ? "--" : s.temp.toFixed(1) + " &deg;C";
+            $("dLeft").textContent = fmtMin(s.timeLeft);
+            $("dUpd").textContent = s.updated ? new Date(s.updated).toLocaleTimeString() : "--";
+            $("dAction").innerHTML = live
+                ? "<div class='px-4 py-3'><div class='text-xs text-zinc-400'>Recommended action</div><div class='text-sm font-semibold mt-1 " + (st.key === "crit" ? "text-[#ff2d55]" : "text-[#007aff]") + "'>" + actionText(s) + "</div></div>"
+                : "";
+            $("dLog").innerHTML = s.log.length ? s.log.map(function (e) {
+                return "<div class='px-4 py-2.5 flex items-start gap-3'>" +
+                    "<span class='text-xs text-zinc-500 shrink-0 pt-0.5'>" + new Date(e.t).toLocaleTimeString() + "</span>" +
+                    "<span class='px-2 py-0.5 rounded-md text-[11px] font-semibold shrink-0 " + (TAGS[e.type] || TAGS.info) + "'>" + esc(e.type) + "</span>" +
+                    "<span class='text-sm text-zinc-200'>" + esc(e.msg) + "</span></div>";
+            }).join("") : "<div class='px-4 py-6 text-xs text-zinc-400 text-center'>No activity yet for this shipment.</div>";
+        }
+
+        function render() {
+            if (currentId) { renderDetail(); } else { renderHome(); renderMap(); }
+        }
+
+        function route() {
+            var m = location.hash.match(/^#\/shipment\/(.+)$/);
+            currentId = m ? decodeURIComponent(m[1]) : null;
+            var onDetail = !!currentId;
+            $("home").classList.toggle("hidden", onDetail);
+            $("detail").classList.toggle("hidden", !onDetail);
+            $("logo").classList.toggle("hidden", onDetail);
+            $("backBtn").classList.toggle("hidden", !onDetail);
+            $("backBtn").classList.toggle("flex", onDetail);
+            window.scrollTo(0, 0);
+            if (!onDetail && map) { map.invalidateSize(); map.fitBounds(fleetBounds, { padding: [40, 40] }); }
+            render();
+        }
+
+        window.addEventListener("hashchange", route);
+        initMap();
+        route();
+        connect();
     </script>
 </body>
 
